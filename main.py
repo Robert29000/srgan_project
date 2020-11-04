@@ -1,22 +1,26 @@
+
 import imageio
 import numpy as np
 import datetime
 from skimage import transform
-from tensorflow.keras.layers import Input, Dense, UpSampling2D, Conv2D
-from tensorflow.keras.layers import BatchNormalization, Activation, Add, PReLU, LeakyReLU
-from tensorflow.keras.models import Model
-from tensorflow.keras.applications import VGG19
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.initializers import Constant
+from keras.layers import Input, Dense, UpSampling2D, Conv2D
+from keras.layers import BatchNormalization, Activation, Add, PReLU, LeakyReLU
+from keras.layers.core import Flatten
+from keras.models import Model
+from keras.applications.vgg19 import VGG19
+from keras.optimizers import Adam
+from keras.initializers import Constant
+from numpy import array
 from glob import glob
 
 
-
-
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+
+    #device_name = tf.test.gpu_device_name()
+    # if device_name != '/device:GPU:0' :
+    #  raise SystemError('GPU device not found')
+    #print(device_name)
+
     dfils = 64
     gfils = 64
     channels = 3
@@ -33,11 +37,10 @@ if __name__ == '__main__':
     # Building pre-trained VGG19 for extracting general image features
 
     vgg = VGG19(weights="imagenet", include_top=False, input_shape=hr_shape)
-    vgg.outputs = [vgg.layers[9].output]
-    img = Input(shape=hr_shape)
-    img_features = vgg(img)
+    for l in vgg.layers:
+        l.trainable = False
 
-    vgg_model = Model(img, img_features)
+    vgg_model = Model(inputs=vgg.input, outputs=vgg.get_layer('block5_conv4').output)
     vgg_model.trainable = False
     vgg_model.compile(loss="mse", optimizer=optimizer, metrics=["accuracy"])
 
@@ -63,13 +66,14 @@ if __name__ == '__main__':
     d8 = d_block(d7, dfils * 8, strides=2)
     d9 = Dense(dfils * 16)(d8)
     d10 = LeakyReLU(alpha=0.2)(d9)
-    validity = Dense(1, activation="sigmoid")(d10)
+    d11 = Flatten()(d10)
+    validity = Dense(1, activation="sigmoid")(d11)
 
     discriminator_model = Model(d0, validity)
     discriminator_model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=["accuracy"])
 
     # Building generator
-
+    print(discriminator_model.summary())
     n_blocks = 16
 
 
@@ -124,59 +128,65 @@ if __name__ == '__main__':
     combined_model.compile(loss=["binary_crossentropy", "mse"], loss_weights=[1e-3, 1], optimizer=optimizer)
 
     # Training
-    epochs = 800
+    epochs = 2000
 
     start_time = datetime.datetime.now()
 
+    path_hr = glob("srgan_train_data/data_train_HR/*")
+    files = []
+
+    for path in path_hr:
+        img = imageio.imread(path)
+        img = transform.resize(img, (hr_height, hr_width))
+        files.append(img)
+
+    train_files = files[:500]
+    print(train_files.shape)
+    train_images_hr = array(train_files)
+    print(train_images_hr.shape)
+    train_images_hr = (train_images_hr.astype(np.float32) - 127.5) / 127.5
+
+    train_files_lr = []
+    train_images_lr = []
+
+    for img in train_files:
+        img = transform.downscale_local_mean(img, (4, 4, 1))
+        train_files_lr.append(img)
+
+    train_images_lr = array(train_files_lr)
+    train_images_lr = (train_images_lr.astype(np.float32) - 127.5) / 127.5
+
+    batch_size = 4
+
+    batch_count = int(train_images_hr.shape[0] / batch_size)
+
+    print(batch_count)
+
     for epoch in range(epochs):
-        # Discriminator
-        path_hr = glob("srgan_train_data/data_train_HR/*")
 
-        list_hr = []
-        list_lr = []
+        for _ in range(batch_count):
+            # Discriminator
 
-        batch_image_hr = np.random.choice(path_hr, size=1)
-        img = imageio.imread(batch_image_hr[0])
-        img_hr = transform.resize(img, (hr_height, hr_width))
-        img_lr = transform.downscale_local_mean(img_hr, (4, 4, 1))
+            rand_nums = np.random.randint(0, train_images_hr.shape[0], size=batch_size)
+            print(rand_nums)
+            image_batch_hr = train_images_hr[rand_nums]
+            image_batch_lr = train_images_lr[rand_nums]
 
-        list_hr.append(img_hr)
-        list_lr.append(img_lr)
+            generated_images_sr = generator_model.predict(image_batch_lr)
 
-        np_hr = np.array(list_hr) / 127.5 - 1.
-        np_lr = np.array(list_lr) / 127.5 - 1.
+            valid = np.ones(batch_size)
+            fake = np.zeros(batch_size)
+            discriminator_model.trainable = True
+            d_loss_real = discriminator_model.train_on_batch(image_batch_hr, valid)
+            d_loss_fake = discriminator_model.train_on_batch(image_batch_lr, fake)
+            # d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
 
-        fake_hr = generator_model.predict(np_lr)
-        patch = int(hr_height/16)
-        patchGan = (patch, patch, 1)
-        valid = np.ones((1,) + patchGan)
-        fake = np.zeros((1,) + patchGan)
+            # Generator
 
-        d_loss_real = discriminator_model.train_on_batch(np_hr, valid)
-        d_loss_fake = discriminator_model.train_on_batch(fake_hr, fake)
-        d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+            valid = np.ones(batch_size)
+            image_features = vgg_model.predict()
 
-        # Generator
-        path_hr = glob("srgan_train_data/data_train_HR/*")
-
-        list_hr = []
-        list_lr = []
-
-        batch_image_hr = np.random.choice(path_hr, size=1)
-        img = imageio.imread(batch_image_hr[0])
-        img_hr = transform.resize(img, (hr_height, hr_width))
-        img_lr = transform.downscale_local_mean(img_hr, (4, 4, 1))
-
-        list_hr.append(img_hr)
-        list_lr.append(img_lr)
-
-        np_hr = np.array(list_hr) / 127.5 - 1.
-        np_lr = np.array(list_lr) / 127.5 - 1.
-
-        valid = np.ones((1, ) + patchGan)
-        image_features = vgg_model.predict(np_hr)
-
-        g_loss = combined_model.train_on_batch([np_lr, np_hr], [valid, image_features])
+           # g_loss = combined_model.train_on_batch([np_lr, np_hr], [valid, image_features])
 
         elapsed_time = datetime.datetime.now() - start_time
         print("%d time: %s" % (epoch, elapsed_time))
