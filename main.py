@@ -3,6 +3,7 @@ import imageio
 import numpy as np
 import datetime
 from skimage import transform
+import keras.backend as K
 from keras.layers import Input, Dense, UpSampling2D, Conv2D
 from keras.layers import BatchNormalization, Activation, Add, PReLU, LeakyReLU
 from keras.layers.core import Flatten
@@ -24,8 +25,8 @@ if __name__ == '__main__':
     dfils = 64
     gfils = 64
     channels = 3
-    lr_height = 256
-    lr_width = 256
+    lr_height = 128
+    lr_width = 128
     lr_shape = (lr_height, lr_width, channels)
 
     hr_height = lr_height * 4
@@ -36,21 +37,30 @@ if __name__ == '__main__':
 
     # Building pre-trained VGG19 for extracting general image features
 
-    vgg = VGG19(weights="imagenet", include_top=False, input_shape=hr_shape)
-    for l in vgg.layers:
+    #vgg = VGG19(weights="imagenet", include_top=False, input_shape=hr_shape)
+    #for l in vgg.layers:
+    #  l.trainable = False
+    #outputs = vgg.layers[9].output
+    #vgg_model = Model(inputs = vgg.input, outputs = outputs)
+    #vgg_model.trainable = False
+    #vgg_model.compile(loss="mse", optimizer=optimizer, metrics=["accuracy"])
+
+    vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=hr_shape)
+    vgg19.trainable = False
+    for l in vgg19.layers:
         l.trainable = False
+    loss_model = Model(inputs=vgg19.input, outputs=vgg19.get_layer('block5_conv4').output)
+    loss_model.trainable = False
 
-    vgg_model = Model(inputs=vgg.input, outputs=vgg.get_layer('block5_conv4').output)
-    vgg_model.trainable = False
-    vgg_model.compile(loss="mse", optimizer=optimizer, metrics=["accuracy"])
-
+    def vgg_loss(y_true, y_pred):
+        return K.mean(K.square(loss_model(y_true) - loss_model(y_pred)))
 
     # Building discriminator
 
     def d_block(layer_input, filters, strides=1, bn=True):
         d = Conv2D(filters, kernel_size=3, strides=strides, padding="same")(layer_input)
         if bn:
-            d = BatchNormalization(momentum=0.8)(d)
+           d = BatchNormalization(momentum=0.8)(d)
         d = LeakyReLU(alpha=0.2)(d)
         return d
 
@@ -73,7 +83,7 @@ if __name__ == '__main__':
     discriminator_model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=["accuracy"])
 
     # Building generator
-    print(discriminator_model.summary())
+
     n_blocks = 16
 
 
@@ -114,79 +124,95 @@ if __name__ == '__main__':
     generator_model = Model(img_lr, out)
 
     comb_lr = Input(lr_shape)
-    comb_hr = Input(hr_shape)
+    #comb_hr = Input(hr_shape)
 
     fake_hr = generator_model(comb_lr)
 
-    fake_features = vgg_model(fake_hr)
+    #fake_features = vgg_model(fake_hr)
 
     discriminator_model.trainable = False
 
     comb_validity = discriminator_model(fake_hr)
 
-    combined_model = Model([comb_lr, comb_hr], [comb_validity, fake_features])
-    combined_model.compile(loss=["binary_crossentropy", "mse"], loss_weights=[1e-3, 1], optimizer=optimizer)
+    combined_model = Model(comb_lr, [comb_validity, fake_hr])
+    combined_model.compile(loss=["binary_crossentropy", vgg_loss], loss_weights=[1e-3, 1.], optimizer=optimizer)
 
     # Training
-    epochs = 2000
+    epochs = 1000
 
     start_time = datetime.datetime.now()
 
     path_hr = glob("srgan_train_data/data_train_HR/*")
-    files = []
 
-    for path in path_hr:
-        img = imageio.imread(path)
-        img = transform.resize(img, (hr_height, hr_width))
-        files.append(img)
 
-    train_files = files[:500]
-    print(train_files.shape)
-    train_images_hr = array(train_files)
-    print(train_images_hr.shape)
-    train_images_hr = (train_images_hr.astype(np.float32) - 127.5) / 127.5
+    img_count = 500
+    train_files = path_hr[:img_count]
 
-    train_files_lr = []
-    train_images_lr = []
 
-    for img in train_files:
-        img = transform.downscale_local_mean(img, (4, 4, 1))
-        train_files_lr.append(img)
+    batch_size = 1
 
-    train_images_lr = array(train_files_lr)
-    train_images_lr = (train_images_lr.astype(np.float32) - 127.5) / 127.5
+    #batch_count = int(img_count / batch_size)
 
-    batch_size = 4
+    batch_count = 20
 
-    batch_count = int(train_images_hr.shape[0] / batch_size)
-
-    print(batch_count)
 
     for epoch in range(epochs):
 
         for _ in range(batch_count):
+
             # Discriminator
 
-            rand_nums = np.random.randint(0, train_images_hr.shape[0], size=batch_size)
-            print(rand_nums)
-            image_batch_hr = train_images_hr[rand_nums]
-            image_batch_lr = train_images_lr[rand_nums]
-
-            generated_images_sr = generator_model.predict(image_batch_lr)
+            rand_nums = np.random.randint(0, img_count, size=batch_size)
+            batch_path_hr = []
+            for indx in rand_nums:
+                batch_path_hr.append(path_hr[indx])
+            images_hr = []
+            images_lr = []
+            for path in batch_path_hr:
+                img = imageio.imread(path)
+                img = transform.resize(img, (hr_height, hr_width))
+                images_hr.append(img)
+            train_images_hr = array(images_hr)
+            train_images_hr = (train_images_hr.astype(np.float32) - 127.5)/127.5
+            for img in images_hr:
+                img = transform.downscale_local_mean(img, (4, 4, 1))
+                images_lr.append(img)
+            train_images_lr = array(images_lr)
+            train_images_lr = (train_images_lr.astype(np.float32) - 127.5)/127.5
+       
+            fake_images_hr = generator_model.predict(train_images_lr)
 
             valid = np.ones(batch_size)
             fake = np.zeros(batch_size)
             discriminator_model.trainable = True
-            d_loss_real = discriminator_model.train_on_batch(image_batch_hr, valid)
-            d_loss_fake = discriminator_model.train_on_batch(image_batch_lr, fake)
-            # d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+            d_loss_real = discriminator_model.train_on_batch(train_images_hr, valid)
+            d_loss_fake = discriminator_model.train_on_batch(fake_images_hr, fake)
+            #d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
 
             # Generator
 
-            valid = np.ones(batch_size)
-            image_features = vgg_model.predict()
+            rand_nums = np.random.randint(0, img_count, size=batch_size)
+            batch_path_hr = []
+            for indx in rand_nums:
+                batch_path_hr.append(path_hr[indx])
+            images_hr = []
+            images_lr = []
+            for path in batch_path_hr:
+                img = imageio.imread(path)
+                img = transform.resize(img, (hr_height, hr_width))
+                images_hr.append(img)
+            train_images_hr = array(images_hr)
+            train_images_hr = (train_images_hr.astype(np.float32) - 127.5)/127.5
+            for img in images_hr:
+                img = transform.downscale_local_mean(img, (4, 4, 1))
+                images_lr.append(img)
+            train_images_lr = array(images_lr)
+            train_images_lr = (train_images_lr.astype(np.float32) - 127.5)/127.5
 
-           # g_loss = combined_model.train_on_batch([np_lr, np_hr], [valid, image_features])
+            valid = np.ones(batch_size)
+            #image_features = vgg_model.predict(train_images_hr)
+            discriminator_model.trainable = False
+            g_loss = combined_model.train_on_batch(train_images_lr, [valid, train_images_hr])
 
         elapsed_time = datetime.datetime.now() - start_time
         print("%d time: %s" % (epoch, elapsed_time))
