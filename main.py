@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
             # Discriminator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, 4)
+            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, 4)
        
             fake_images_hr = generator_model.predict(train_images_lr)
 

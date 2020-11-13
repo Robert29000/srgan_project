@@ -19,7 +19,7 @@ class DataLoader(object):
         data = (data + 1) * 127.5
         return data.astype(np.uint8)
 
-    def get_train_images(self, batch_size, hr_height, hr_width, scale_factor):
+    def get_train_images(self, batch_size, scale_factor):
         rand_nums = np.random.randint(0, self.data_count, size=batch_size)
         batch_paths = []
         for index in rand_nums:
@@ -29,10 +29,9 @@ class DataLoader(object):
         images_lr = []
 
         for path in batch_paths:
-            img = imageio.imread(path)
-            img = transform.resize(img, (hr_height, hr_width))
+            img = imageio.imread(path, pilmode="RGB")
             images_hr.append(img)
-            img = transform.rescale(img, scale_factor)
+            img = transform.downscale_local_mean(img, (scale_factor, scale_factor, 1))
             images_lr.append(img)
 
         train_images_hr = array(images_hr)
