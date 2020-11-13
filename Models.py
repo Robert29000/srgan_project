@@ -87,7 +87,7 @@ class VGG_LOSS(object):
 
     def __init__(self, shape):
         self.shape = shape
-        vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=hr_shape)
+        vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=shape)
         vgg19.trainable = False
         for l in vgg19.layers:
             l.trainable = False
