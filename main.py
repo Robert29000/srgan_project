@@ -1,11 +1,11 @@
 import numpy as np
 import datetime
+from keras.applications.vgg19 import VGG19
 from keras.layers import Input
 from keras.models import Model
 from keras.optimizers import Adam
 from Models import Generator, Discriminator, VGG_LOSS
 from DataLoader import DataLoader
-
 
 
 if __name__ == '__main__':
@@ -14,6 +14,7 @@ if __name__ == '__main__':
     # if device_name != '/device:GPU:0' :
     #  raise SystemError('GPU device not found')
     #print(device_name)
+
     channels = 3
     lr_height = 128
     lr_width = 128
@@ -32,66 +33,77 @@ if __name__ == '__main__':
     discriminator_model = Discriminator(hr_shape).get_discriminator_model()
 
     discriminator_model.compile(loss="binary_crossentropy", optimizer=optimizer)
-    print(discriminator_model.summary())
+    # print(discriminator_model.summary())
 
     # Building generator
 
     generator_model = Generator(lr_shape).get_generator_model();
     generator_model.compile(loss=loss.vgg_loss, optimizer=optimizer)
-    print(generator_model.summary())
+    # print(generator_model.summary())
 
     # Building combined model
 
-    def get_combined_model(generator, discriminator):
-        discriminator.trainable = False
-        comb_input = Input(shape=lr_shape)
-        x = generator(comb_input)
-        comb_output = discriminator(x)
-        combined_model = Model(comb_input, [comb_output, x])
-        combined_model.compile(loss=["binary_crossentropy", loss.vgg_loss], loss_weights=[1e-3, 1.], optimizer=optimizer)
-        return combined_model
+    vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=hr_shape)
+    vgg19.trainable = False
+    for l in vgg19.layers:
+        l.trainable = False
 
-    combined_model = get_combined_model(generator_model, discriminator_model)
+    vgg_model = Model(inputs=vgg19.input, outputs=vgg19.get_layer('block5_conv4').output)
+
+    comb_input = Input(shape=lr_shape)
+    x = generator_model(comb_input)
+    discriminator_model.trainable = False
+    comb_val = discriminator_model(x)
+    features = vgg_model(x)
+
+    combined_model = Model(inputs=comb_input, outputs=[comb_val, features])
+    combined_model.compile(loss=['binary_crossentropy', 'mse'],
+                           loss_weights=[1e-3, 1.],
+                           optimizer=optimizer)
 
     # Training
     epochs = 800
 
-    dataLoader = DataLoader("srgan_train_data/data_train_HR/*", 500)
+    dataLoader = DataLoader("drive/My Drive/data_train_HR/", 500)
 
     batch_size = 1
 
-    #batch_count = int(img_count / batch_size)
+    # batch_count = int(img_count / batch_size)
 
-    batch_count = 10
+    batch_count = 20
 
     start_time = datetime.datetime.now()
+
+    np.random.seed(10)
 
     for epoch in range(epochs):
 
         for _ in range(batch_count):
-
             # Discriminator
 
             train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, 4)
-       
+
             fake_images_hr = generator_model.predict(train_images_lr)
 
-            valid = np.ones(batch_size)
-            fake = np.zeros(batch_size)
+            valid = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.1
+            fake = np.random.random_sample(batch_size) * 0.1
             discriminator_model.trainable = True
             d_loss_real = discriminator_model.train_on_batch(train_images_hr, valid)
             d_loss_fake = discriminator_model.train_on_batch(fake_images_hr, fake)
-            d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+            # d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
 
             # Generator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, 4)
+            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, 4)
 
-            valid = np.ones(batch_size)
+            valid = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.1
             discriminator_model.trainable = False
-            g_loss = combined_model.train_on_batch(train_images_lr, [valid, train_images_hr])
+            fake_features = vgg_model.predict(train_images_hr)
+            g_loss = combined_model.train_on_batch(train_images_lr, [valid, fake_features])
 
         elapsed_time = datetime.datetime.now() - start_time
         print("%d time: %s" % (epoch, elapsed_time))
+
+    #generator_model.save("drive/My Drive/saved_models/generator_m_v2.h5")
 
 

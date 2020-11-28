@@ -82,8 +82,8 @@ class Discriminator(object):
 
         return Model(dis_input, model)
 
-class VGG_LOSS(object):
 
+class VGG_LOSS(object):
 
     def __init__(self, shape):
         self.shape = shape
