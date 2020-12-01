@@ -4,6 +4,7 @@ from glob import glob
 from skimage import transform
 from numpy import array
 
+
 class DataLoader(object):
 
     def __init__(self, data_path=None, data_count=0):
@@ -19,7 +20,7 @@ class DataLoader(object):
         data = (data + 1) * 127.5
         return data.astype(np.uint8)
 
-    def get_train_images(self, batch_size, scale_factor):
+    def get_train_images(self, batch_size, height, width, scale_factor):
         rand_nums = np.random.randint(0, self.data_count, size=batch_size)
         batch_paths = []
         for index in rand_nums:
@@ -30,6 +31,8 @@ class DataLoader(object):
 
         for path in batch_paths:
             img = imageio.imread(path, pilmode="RGB")
+            img = transform.resize(img, (height, width))
+            img = (img * 255).astype(np.uint8)
             images_hr.append(img)
             img = transform.downscale_local_mean(img, (scale_factor, scale_factor, 1))
             images_lr.append(img)

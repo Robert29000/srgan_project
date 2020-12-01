@@ -1,6 +1,5 @@
 import numpy as np
 import datetime
-from keras.applications.vgg19 import VGG19
 from keras.layers import Input
 from keras.models import Model
 from keras.optimizers import Adam
@@ -10,10 +9,10 @@ from DataLoader import DataLoader
 
 if __name__ == '__main__':
 
-    #device_name = tf.test.gpu_device_name()
-    # if device_name != '/device:GPU:0' :
-    #  raise SystemError('GPU device not found')
-    #print(device_name)
+    # device_name = tf.test.gpu_device_name()
+    #  if device_name != '/device:GPU:0' :
+    #   raise SystemError('GPU device not found')
+    # print(device_name)
 
     channels = 3
     lr_height = 128
@@ -37,18 +36,13 @@ if __name__ == '__main__':
 
     # Building generator
 
-    generator_model = Generator(lr_shape).get_generator_model();
+    generator_model = Generator(lr_shape).get_generator_model()
     generator_model.compile(loss=loss.vgg_loss, optimizer=optimizer)
     # print(generator_model.summary())
 
     # Building combined model
 
-    vgg19 = VGG19(include_top=False, weights='imagenet', input_shape=hr_shape)
-    vgg19.trainable = False
-    for l in vgg19.layers:
-        l.trainable = False
-
-    vgg_model = Model(inputs=vgg19.input, outputs=vgg19.get_layer('block5_conv4').output)
+    vgg_model = loss.loss_model
 
     comb_input = Input(shape=lr_shape)
     x = generator_model(comb_input)
@@ -64,7 +58,7 @@ if __name__ == '__main__':
     # Training
     epochs = 800
 
-    dataLoader = DataLoader("drive/My Drive/data_train_HR/", 500)
+    dataLoader = DataLoader("srgan_train_data/data_train_HR/", 500)
 
     batch_size = 1
 
@@ -81,7 +75,7 @@ if __name__ == '__main__':
         for _ in range(batch_count):
             # Discriminator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, 4)
+            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, 4)
 
             fake_images_hr = generator_model.predict(train_images_lr)
 
@@ -94,7 +88,7 @@ if __name__ == '__main__':
 
             # Generator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, 4)
+            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, 4)
 
             valid = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.1
             discriminator_model.trainable = False
