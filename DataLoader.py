@@ -13,10 +13,12 @@ class DataLoader(object):
             self.data_count = data_count
             self.image_paths = dir_path[:self.data_count]
 
-    def normalize(self, data):
+    @staticmethod
+    def normalize(data):
         return (data.astype(np.float32) - 127.5)/127.5
 
-    def denormalize(self, data):
+    @staticmethod
+    def denormalize(data):
         data = (data + 1) * 127.5
         return data.astype(np.uint8)
 
