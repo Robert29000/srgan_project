@@ -9,7 +9,7 @@ Automat==0.7.0
 Babel==2.7.0
 backports.os==0.1.1
 bleach==3.1.0
-brial>=1.0.2
+python-brial>=1.0.2
 certifi==2020.12.5
 cffi==1.12.3
 chardet==3.0.4
