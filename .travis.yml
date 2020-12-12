@@ -15,6 +15,7 @@ python:
   - "3.8"
 
 install:
+  - ./.travis/install.sh
   - pip install --upgrade pip
   - pip install -r requirements.txt
 
