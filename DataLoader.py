@@ -7,7 +7,7 @@ from numpy import array
 
 class DataLoader(object):
 
-    def __init__(self, data_path=None, data_count=0):
+    def __init__(self, data_path, data_count):
         if data_path is not None:
             dir_path = glob(data_path+"*")
             self.data_count = data_count

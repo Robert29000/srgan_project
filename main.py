@@ -8,13 +8,13 @@ from DataLoader import DataLoader
 import argparse
 
 
-def train(lr_height, lr_width, scale, data_dir, model_output_dir, epochs, batch_size, batch_count):
+def train(lr_height, lr_width, data_dir, model_output_dir, epochs, batch_size, batch_count):
 
     # device_name = tf.test.gpu_device_name()
     #  if device_name != '/device:GPU:0' :
     #   raise SystemError('GPU device not found')
     # print(device_name)
-
+    scale = 4
     channels = 3
     lr_height = lr_height
     lr_width = lr_width
@@ -59,7 +59,7 @@ def train(lr_height, lr_width, scale, data_dir, model_output_dir, epochs, batch_
     # Training
     epochs = epochs
 
-    dataLoader = DataLoader(data_dir, 500)
+    loader = DataLoader(data_dir, 500)
 
     batch_size = batch_size
 
@@ -76,7 +76,7 @@ def train(lr_height, lr_width, scale, data_dir, model_output_dir, epochs, batch_
         for _ in range(batch_count):
             # Discriminator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, scale)
+            train_images_lr, train_images_hr = loader.get_train_images(batch_size, hr_height, hr_width, scale)
 
             fake_images_hr = generator_model.predict(train_images_lr)
 
@@ -89,7 +89,7 @@ def train(lr_height, lr_width, scale, data_dir, model_output_dir, epochs, batch_
 
             # Generator
 
-            train_images_lr, train_images_hr = dataLoader.get_train_images(batch_size, hr_height, hr_width, scale)
+            train_images_lr, train_images_hr = loader.get_train_images(batch_size, hr_height, hr_width, scale)
 
             valid = np.ones(batch_size) - np.random.random_sample(batch_size) * 0.1
             discriminator_model.trainable = False
@@ -106,7 +106,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="SRGAN training script")
     parser.add_argument('-l', '--lr_height', type=int, default=128, help='Low res image height')
     parser.add_argument('-w', '--lr_width', type=int, default=128, help='Low res image width')
-    parser.add_argument('-s', '--scale', type=int, default=4, help='Scale factor')
     parser.add_argument('-i', '--input_dir', default='srgan_train_data/data_train_HR/', help='Input image train directory')
     parser.add_argument('-o', '--output_dir', default='', help='Ouput directory for model')
     parser.add_argument('-e', '--epochs', type=int, default=800, help='Number of training epochs')
@@ -115,6 +114,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    train(lr_height=args.lr_height, lr_width=args.lr_width, scale=args.scale,
+    train(lr_height=args.lr_height, lr_width=args.lr_width,
           data_dir=args.input_dir, model_output_dir=args.output_dir,
           epochs=args.epochs, batch_size=args.batch_size, batch_count=args.batch_count)
