@@ -8,10 +8,11 @@ from numpy import array
 class DataLoader(object):
 
     def __init__(self, data_path, data_count):
-        if data_path is not None:
-            dir_path = glob(data_path+"*")
-            self.data_count = data_count
-            self.image_paths = dir_path[:self.data_count]
+        dir_path = glob(data_path+"*")
+        self.data_count = data_count
+        self.image_paths = dir_path[:self.data_count]
+        if len(self.image_paths) != data_count:
+            raise RuntimeError("Not enough data in directory")
 
     @staticmethod
     def normalize(data):

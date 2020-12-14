@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import datetime
 from keras.layers import Input
@@ -59,7 +60,7 @@ def train(lr_height, lr_width, data_dir, model_output_dir, epochs, batch_size, b
     # Training
     epochs = epochs
 
-    loader = DataLoader(data_dir, 500)
+    loader = DataLoader(data_dir, 600)
 
     batch_size = batch_size
 
@@ -107,12 +108,17 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--lr_height', type=int, default=128, help='Low res image height')
     parser.add_argument('-w', '--lr_width', type=int, default=128, help='Low res image width')
     parser.add_argument('-i', '--input_dir', default='srgan_train_data/data_train_HR/', help='Input image train directory')
-    parser.add_argument('-o', '--output_dir', default='', help='Ouput directory for model')
+    parser.add_argument('-o', '--output_dir', default='/', help='Output directory for model')
     parser.add_argument('-e', '--epochs', type=int, default=800, help='Number of training epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('-c', '--batch_count', type=int, default=20, help='Batch count')
 
     args = parser.parse_args()
+
+    if not os.path.isdir(args.input_dir):
+        raise RuntimeError("Input directory does not exist")
+    if not os.path.isdir(args.output_dir):
+        raise RuntimeError("Output directory does not exist")
 
     train(lr_height=args.lr_height, lr_width=args.lr_width,
           data_dir=args.input_dir, model_output_dir=args.output_dir,
