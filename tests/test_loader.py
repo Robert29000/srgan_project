@@ -6,7 +6,7 @@ from numpy import array
 
 @pytest.fixture
 def loader():
-    return DataLoader(data_path="srgan_train_data/data_train_HR/", data_count=500)
+    return DataLoader(data_path="third_party/srgan_train_data/data_train_HR/", data_count=500)
 
 
 def test_constructor(loader):
